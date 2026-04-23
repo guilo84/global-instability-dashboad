@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Global Instability Map</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        body { margin: 0; padding: 0; background-color: #1a1a1a; color: white; font-family: sans-serif; }
+        /* The map needs a defined height to render */
+        #map { height: 100vh; width: 100%; }
+        
+        /* Dark theme for popups to match the vibe */
+        .leaflet-popup-content-wrapper { background: #2d2d2d; color: #fff; border-radius: 4px; }
+        .leaflet-popup-tip { background: #2d2d2d; }
+    </style>
+</head>
+<body>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        // 1. Initialize the map and set its view to a global perspective
+        const map = L.map('map').setView([20, 0], 2);
+
+        // 2. Add a dark-themed basemap tile layer (CartoDB Dark Matter)
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 19
+        }).addTo(map);
+
+        // 3. Fetch the data from your running FastAPI server
+        fetch('http://localhost:8000/api/events')
+            .then(response => response.json())
+            .then(data => {
+                
+                // 4. Parse the GeoJSON and add it to the map
+                L.geoJSON(data, {
+                    // Customize how the points look
+                    pointToLayer: function (feature, latlng) {
+                        return L.circleMarker(latlng, {
+                            radius: 6,
+                            fillColor: "#ff4444", // Red for instability
+                            color: "#000",
+                            weight: 1,
+                            opacity: 1,
+                            fillOpacity: 0.8
+                        });
+                    },
+                    // Bind a popup to each point
+                    onEachFeature: function (feature, layer) {
+                        const props = feature.properties;
+                        const popupContent = `
+                            <strong>${props.category}</strong><br>
+                            Date: ${props.date}<br>
+                            Severity: ${props.severity}<br>
+                            <a href="${props.source}" target="_blank" style="color: #66b3ff;">Read Source</a>
+                        `;
+                        layer.bindPopup(popupContent);
+                    }
+                }).addTo(map);
+                
+            })
+            .catch(error => console.error('Error fetching data:', error));
+    </script>
+</body>
+</html>
