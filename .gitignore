@@ -1,0 +1,20 @@
+# .gitignore
+
+# Python virtual environment
+.venv/
+venv/
+
+# Environment variables (CRITICAL)
+.env
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+
+# Node/React modules (for when we build the frontend)
+node_modules/
+dist/
+
+# Other files
+hormuz_graph.ttl

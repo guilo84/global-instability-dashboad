@@ -20,13 +20,18 @@ load_dotenv()
 DATABASE_URI = os.getenv("DATABASE_URI")
 engine = create_engine(DATABASE_URI)
 
-
+# This returns an empty "204 No Content" status, telling the browser 
+# to stop looking for an icon without throwing an error.
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return Response(status_code=204)
 
 @app.get("/api/events")
 def get_events(limit: int = 1000):
     """
     Fetches instability events, filtering out US domestic noise.
     """
+
     query = text("""
         SELECT 
             id, 
