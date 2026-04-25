@@ -16,5 +16,8 @@ __pycache__/
 node_modules/
 dist/
 
+# Local Database Volume
+db_data/
+
 # Other files
 hormuz_graph.ttl
