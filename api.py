@@ -27,7 +27,7 @@ def favicon():
     return Response(status_code=204)
 
 @app.get("/api/events")
-def get_events(limit: int = 1000):
+def get_events(limit: int = 25000):
     """
     Fetches instability events, filtering out US domestic noise.
     """
