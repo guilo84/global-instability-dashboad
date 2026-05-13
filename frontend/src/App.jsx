@@ -5,23 +5,29 @@ import 'leaflet/dist/leaflet.css';
 
 function App() {
   // --- STATE MANAGEMENT ---
-  const [geoData, setGeoData] = useState(null);            // Holds the raw, master dataset
-  const [uniqueDates, setUniqueDates] = useState([]);      // Holds an array of ['2026-04-23', '2026-04-24']
-  const [selectedDateIndex, setSelectedDateIndex] = useState(0); // Tracks the slider's position
+  const [geoData, setGeoData] = useState(null);
+  const [uniqueDates, setUniqueDates] = useState([]);
+  const [selectedDateIndex, setSelectedDateIndex] = useState(0);
+  
+  // NEW STATE: Track the unique categories and which ones are currently checked
+  const [uniqueCategories, setUniqueCategories] = useState([]);
+  const [activeCategories, setActiveCategories] = useState([]);
 
   // --- DATA FETCHING ---
   useEffect(() => {
     fetch('http://localhost:8000/api/events')
       .then(response => response.json())
       .then(data => {
-        // 1. Extract unique dates and sort chronologically
+        // Timeline setup
         const dates = [...new Set(data.features.map(f => f.properties.date))].sort();
         setUniqueDates(dates);
-        
-        // 2. Default the slider to the most recent date (the end of the array)
         setSelectedDateIndex(dates.length - 1);
         
-        // 3. Save the master dataset
+        // Category setup: Extract all unique event categories
+        const categories = [...new Set(data.features.map(f => f.properties.category))].sort();
+        setUniqueCategories(categories);
+        setActiveCategories(categories); // Default to all categories checked
+        
         setGeoData(data);
       })
       .catch(error => console.error('Error fetching data:', error));
@@ -49,25 +55,68 @@ function App() {
     `);
   };
 
+  // --- INTERACTION LOGIC ---
+  // Toggle categories in and out of the active array
+  const handleCategoryToggle = (category) => {
+    setActiveCategories(prev => 
+      prev.includes(category) 
+        ? prev.filter(c => c !== category) // Remove it if it was checked
+        : [...prev, category]              // Add it if it wasn't
+    );
+  };
+
   // --- DATA FILTERING ---
-  // Create a temporary subset of data based on where the slider is sitting
   const activeDate = uniqueDates[selectedDateIndex];
+  
+  // Update the filter to check BOTH the date and the category array
   const filteredData = geoData ? {
     ...geoData,
-    features: geoData.features.filter(f => f.properties.date === activeDate)
+    features: geoData.features.filter(f => 
+      f.properties.date === activeDate && 
+      activeCategories.includes(f.properties.category)
+    )
   } : null;
 
   // --- RENDER ---
   return (
     <div style={{ position: 'relative', height: '100vh', width: '100vw' }}>
       
-      {/* 1. THE FLOATING TIMELINE UI */}
+      {/* NEW: THE FLOATING CATEGORY FILTER UI */}
+      <div style={{
+        position: 'absolute',
+        top: '20px',
+        right: '20px',
+        zIndex: 1000,
+        backgroundColor: 'rgba(45, 45, 45, 0.9)',
+        padding: '15px',
+        borderRadius: '8px',
+        color: 'white',
+        boxShadow: '0 4px 6px rgba(0,0,0,0.5)',
+        minWidth: '200px'
+      }}>
+        <h4 style={{ margin: '0 0 10px 0', borderBottom: '1px solid #555', paddingBottom: '5px' }}>Filters</h4>
+        {uniqueCategories.map(cat => (
+          <div key={cat} style={{ marginBottom: '8px' }}>
+            <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+              <input 
+                type="checkbox" 
+                checked={activeCategories.includes(cat)}
+                onChange={() => handleCategoryToggle(cat)}
+                style={{ marginRight: '10px', cursor: 'pointer' }}
+              />
+              <span style={{ fontSize: '14px' }}>{cat}</span>
+            </label>
+          </div>
+        ))}
+      </div>
+
+      {/* THE FLOATING TIMELINE UI (UNCHANGED) */}
       <div style={{
         position: 'absolute',
         bottom: '30px',
         left: '50%',
-        transform: 'translateX(-50%)', // Centers the box perfectly
-        zIndex: 1000,                  // Ensures it floats above the Leaflet map
+        transform: 'translateX(-50%)',
+        zIndex: 1000,
         backgroundColor: 'rgba(45, 45, 45, 0.9)',
         padding: '15px 30px',
         borderRadius: '8px',
@@ -92,21 +141,17 @@ function App() {
         />
       </div>
 
-      {/* 2. THE MAP */}
+      {/* THE MAP */}
       <MapContainer center={[20, 0]} zoom={2} style={{ height: '100%', width: '100%' }}>
         <TileLayer
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
           attribution='&copy; <a href="https://carto.com/">CARTO</a>'
         />
         
-        {/* CRITICAL REACT-LEAFLET TRICK: 
-          React-Leaflet's GeoJSON component normally ignores data updates. 
-          By passing the activeDate as the 'key', we force React to destroy 
-          the old layer and draw a fresh one every time the slider moves. 
-        */}
         {filteredData && filteredData.features.length > 0 && (
           <GeoJSON 
-            key={`geojson-${activeDate}`} 
+            // We update the key to include activeCategories length so React knows to redraw when boxes are checked
+            key={`geojson-${activeDate}-${activeCategories.length}`} 
             data={filteredData} 
             pointToLayer={pointToLayer} 
             onEachFeature={onEachFeature} 
