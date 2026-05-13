@@ -1,9 +1,10 @@
 import os
-from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles # <-- ADD THIS
 from sqlalchemy import create_engine, text
 import json
+from dotenv import load_dotenv
 
 app = FastAPI(title="Global Instability API")
 
@@ -70,4 +71,13 @@ def get_events(limit: int = 500000):
         "type": "FeatureCollection",
         "features": features
     }
+# --- SERVE THE REACT FRONTEND ---
+# Get the absolute path to your React build folder
+frontend_dist = os.path.join(os.path.dirname(__file__), "frontend", "dist")
 
+# Mount the folder to the root path. 
+# html=True tells it to automatically serve 'index.html' when someone visits '/'
+if os.path.exists(frontend_dist):
+    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
+else:
+    print(f"Warning: Could not find React build directory at {frontend_dist}")
