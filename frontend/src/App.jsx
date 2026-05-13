@@ -24,7 +24,7 @@ function App() {
 
   // --- DATA FETCHING ---
   useEffect(() => {
-    fetch('http://localhost:8000/api/events')
+    fetch('/api/events') // <-- The fix: Just a relative path!
       .then(response => response.json())
       .then(data => {
         const dates = [...new Set(data.features.map(f => f.properties.date))].sort();

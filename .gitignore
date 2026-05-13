@@ -21,3 +21,4 @@ db_data/
 
 # Other files
 hormuz_graph.ttl
+backup.sql

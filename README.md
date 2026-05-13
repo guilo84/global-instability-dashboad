@@ -15,3 +15,13 @@ docker run --name globinst-db \
   -p 5432:5432 \
   -v ~/globinstdash/db_data:/var/lib/postgresql/data \
   -d postgis/postgis
+#be in root folder, run 
+
+docker update --restart unless-stopped globinst-db
+
+uvicorn api:app --reload
+
+# go to frontend, run 
+
+
+npm run dev
