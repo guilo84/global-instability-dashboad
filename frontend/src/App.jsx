@@ -162,10 +162,18 @@ function App() {
       </div>
 
       {/* THE MAP */}
-      <MapContainer center={[20, 0]} zoom={2} style={{ height: '100%', width: '100%' }}>
+      <MapContainer 
+        center={[20, 0]} 
+        zoom={2} 
+        minZoom={2} // Prevent zooming out into the void
+        maxBounds={[[-90, -180], [90, 180]]} // Hard coordinate limits (South/West to North/East)
+        maxBoundsViscosity={1.0} // Make the bounds solid so you can't drag past them
+        style={{ height: '100%', width: '100%' }}
+      >
         <TileLayer
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
           attribution='&copy; <a href="https://carto.com/">CARTO</a>'
+          noWrap={true} // Stop the horizontal Ringworld tiling
         />
         
         {filteredData && filteredData.features.length > 0 && (
@@ -176,8 +184,7 @@ function App() {
             onEachFeature={onEachFeature} 
           />
         )}
-      </MapContainer>
-    </div>
+      </MapContainer>    </div>
   );
 }
 
