@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Response, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles # <-- ADD THIS
 from sqlalchemy import create_engine, text
@@ -28,30 +28,44 @@ def favicon():
     return Response(status_code=204)
 
 @app.get("/api/events")
-def get_events(limit: int = 500000):
+def get_events(
+    days: str = Query("7", description="Number of days, or 'all'"), 
+    keyword: str = Query("", description="Keyword to search in URL or category")
+):
     """
-    Fetches instability events, filtering out US domestic noise.
+    Fetches instability events with dynamic filtering for timeframe and keywords.
     """
-
-    query = text("""
+    # 1. Base query
+    query_str = """
         SELECT 
-            id, 
-            event_date, 
-            event_category, 
-            country_code, 
-            goldstein_scale, 
-            source_url, 
-            ST_AsGeoJSON(geom) as geometry
+            id, event_date, event_category, country_code, 
+            goldstein_scale, source_url, ST_AsGeoJSON(geom) as geometry
         FROM instability_events
         WHERE goldstein_scale <= -2.0 
           AND country_code != 'US'
-        ORDER BY event_date DESC
-        LIMIT :limit
-    """)
+    """
+    params = {}
+
+    # 2. Apply Timeframe Filter (if they didn't select "all")
+    if days != "all":
+        # In SQL, CURRENT_DATE - 7 gives us a rolling 7-day window
+        query_str += " AND event_date >= CURRENT_DATE - CAST(:days AS INTEGER)"
+        params["days"] = int(days)
+
+    # 3. Apply Keyword Filter
+    if keyword:
+        # ILIKE is Postgres for "case-insensitive search"
+        # We search both the category and the source URL for the keyword
+        query_str += " AND (event_category ILIKE :keyword OR source_url ILIKE :keyword)"
+        # The % symbols are SQL wildcards (e.g., search anywhere in the string)
+        params["keyword"] = f"%{keyword}%"
+
+    # 4. Finish the query and cap the limit to protect the browser
+    query_str += " ORDER BY event_date DESC LIMIT 50000"
     
     features = []
     with engine.connect() as conn:
-        result = conn.execute(query, {"limit": limit})
+        result = conn.execute(text(query_str), params)
         for row in result:
             feature = {
                 "type": "Feature",
@@ -71,6 +85,7 @@ def get_events(limit: int = 500000):
         "type": "FeatureCollection",
         "features": features
     }
+
 # --- SERVE THE REACT FRONTEND ---
 # Get the absolute path to your React build folder
 frontend_dist = os.path.join(os.path.dirname(__file__), "frontend", "dist")
