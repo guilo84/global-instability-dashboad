@@ -25,3 +25,14 @@ uvicorn api:app --reload
 
 
 npm run dev
+
+Whenever you make changes to your React code and want them to appear on your public-facing web UI, you have to compile those changes into the dist folder.
+
+Open your terminal and navigate to your frontend directory:
+
+
+cd ~/project/globinstdash/frontend
+Run the build command to overwrite the old dist folder with your new code:
+
+
+npm run build
