@@ -51,6 +51,9 @@ def get_events(
         # In SQL, CURRENT_DATE - 7 gives us a rolling 7-day window
         query_str += " AND event_date >= CURRENT_DATE - CAST(:days AS INTEGER)"
         params["days"] = int(days)
+    else:
+        # Cap "all" at 365 days to prevent massive payloads and protect memory
+        query_str += " AND event_date >= CURRENT_DATE - 365"
 
     # 3. Apply Keyword Filter
     if keyword:
