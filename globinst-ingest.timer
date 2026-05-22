@@ -1,0 +1,11 @@
+[Unit]
+Description=Run GDELT Ingestion every 15 minutes
+
+[Timer]
+# Triggers at :00, :15, :30, and :45 past the hour
+OnCalendar=*:0/15
+# If the machine was off during a scheduled run, execute immediately upon boot
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,17 @@
+[Unit]
+Description=Global Instability Dashboard Data Ingestion
+# Ensure the network is up and the database is accessible before running
+After=network.target postgresql.service 
+
+[Service]
+Type=oneshot
+# Run as your standard user, not root
+User=username       
+WorkingDirectory=/path/to/globinstdash
+
+# Execute using the venv's Python binary directly
+ExecStart=/path/to/.venv/bin/python /path/to/globinstdash/ingest.py
+
+# Route output to the system journal for easy troubleshooting
+StandardOutput=journal
+StandardError=journal

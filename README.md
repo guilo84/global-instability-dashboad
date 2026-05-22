@@ -1,6 +1,6 @@
 Building a visual database and visualization tool to measure global instability.
 
-
+The service and timer file belong in the /etc/systemd/system/ directory.
 
 
 ##Necessary steps
