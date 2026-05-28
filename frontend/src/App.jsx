@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, GeoJSON } from 'react-leaflet';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -12,162 +13,140 @@ const CATEGORY_COLORS = {
 };
 
 function App() {
+  // --- GDELT State ---
   const [geoData, setGeoData] = useState(null);
-  const [uniqueDates, setUniqueDates] = useState([]);
-  const [selectedDateIndex, setSelectedDateIndex] = useState(0);
-  const [uniqueCategories, setUniqueCategories] = useState([]);
-  const [activeCategories, setActiveCategories] = useState([]);
-
-  // --- NEW: BACKEND FILTER STATE ---
-  const [timeframe, setTimeframe] = useState("7"); // Defaults to 7 days
+  const [timeframe, setTimeframe] = useState("7");
   const [keywordInput, setKeywordInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // --- REFACTORED: FETCH FUNCTION ---
-  // We moved the fetch logic into a reusable function so we can call it when the user clicks "Search"
-  const fetchMapData = () => {
+  // --- POLYKRATIA Volatility State ---
+  const [kalshiData, setKalshiData] = useState([]);
+  
+  // --- LINKED BRUSHING State ---
+  const [hoveredTime, setHoveredTime] = useState(null);
+
+  const fetchDashboardData = async () => {
     setIsLoading(true);
     
-    // Dynamically build the URL based on the user's inputs
-    const apiUrl = `/api/events?days=${timeframe}&keyword=${encodeURIComponent(keywordInput)}`;
+    try {
+      // 1. Fetch Geographic GDELT Data
+      const geoUrl = `/api/events?days=${timeframe}&keyword=${encodeURIComponent(keywordInput)}`;
+      const geoResponse = await fetch(geoUrl);
+      const geoJson = await geoResponse.json();
+      setGeoData(geoJson);
 
-    fetch(apiUrl)
-      .then(response => response.json())
-      .then(data => {
-        const dates = [...new Set(data.features.map(f => f.properties.date))].sort();
-        setUniqueDates(dates);
-        setSelectedDateIndex(dates.length - 1); // Reset slider to newest date
-        
-        const categories = [...new Set(data.features.map(f => f.properties.category))].sort();
-        setUniqueCategories(categories);
-        setActiveCategories(categories); 
-        
-        setGeoData(data);
-        setIsLoading(false);
-      })
-      .catch(error => {
-        console.error('Error fetching data:', error);
-        setIsLoading(false);
-      });
+      // 2. Fetch Financial Volatility Data (Point this to your FastAPI host)
+      const volUrl = `http://localhost:8001/api/v1/kalshi/volatility?limit=100`;
+      const volResponse = await fetch(volUrl);
+      const volJson = await volResponse.json();
+      
+      // Recharts plots left-to-right, so we reverse the descending DB data
+      setKalshiData(volJson.reverse());
+
+    } catch (error) {
+      console.error("Failed to fetch dashboard data:", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Run the fetch once when the app first loads
+  // GeoJSON Styling logic (Reacts to the chart hover!)
+  const geoJsonStyle = (feature) => {
+    const isHovered = hoveredTime && feature.properties.date === hoveredTime;
+    
+    return {
+      radius: isHovered ? 12 : 6, // Pulse larger if hovered on chart
+      fillColor: isHovered ? '#ffff00' : CATEGORY_COLORS[feature.properties.category] || CATEGORY_COLORS['Other'],
+      color: isHovered ? '#ffffff' : '#000',
+      weight: isHovered ? 2 : 1,
+      opacity: 1,
+      fillOpacity: isHovered ? 1.0 : 0.6 // Dim non-hovered items
+    };
+  };
+
+// Trigger the initial data fetch when the application loads
   useEffect(() => {
-    fetchMapData();
+    fetchDashboardData(); //  Updated to match your async function
   }, []);
 
-  // --- MAP STYLING & LOGIC ---
-  const pointToLayer = (feature, latlng) => {
-    const markerColor = CATEGORY_COLORS[feature.properties.category] || "#ffffff";
-    return L.circleMarker(latlng, {
-      radius: 6, fillColor: markerColor, color: "#000", weight: 1, opacity: 1, fillOpacity: 0.8
-    });
-  };
-
-  const onEachFeature = (feature, layer) => {
-    const props = feature.properties;
-    layer.bindPopup(`
-      <strong>${props.category}</strong><br/>
-      Date: ${props.date}<br/>
-      Severity: ${props.severity}<br/>
-      <a href="${props.source}" target="_blank" style="color: #66b3ff;">Read Source</a>
-    `);
-  };
-
-  const handleCategoryToggle = (category) => {
-    setActiveCategories(prev => 
-      prev.includes(category) ? prev.filter(c => c !== category) : [...prev, category]              
-    );
-  };
-
-  const activeDate = uniqueDates[selectedDateIndex];
-  const filteredData = geoData ? {
-    ...geoData,
-    features: geoData.features.filter(f => 
-      f.properties.date === activeDate && activeCategories.includes(f.properties.category)
-    )
-  } : null;
-
-  // --- RENDER ---
   return (
-    <div style={{ position: 'relative', height: '100vh', width: '100vw' }}>
+    // Main Container: Flex Column for Stacking
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: '#121212', color: 'white', fontFamily: 'sans-serif' }}>
       
-      {/* NEW: THE DATABASE QUERY PANEL (Top Left) */}
-      <div style={{
-        position: 'absolute', top: '20px', left: '50px', zIndex: 1000,
-        backgroundColor: 'rgba(45, 45, 45, 0.9)', padding: '15px',
-        borderRadius: '8px', color: 'white', boxShadow: '0 4px 6px rgba(0,0,0,0.5)',
-        display: 'flex', gap: '10px', alignItems: 'center'
-      }}>
-        <select 
-          value={timeframe} 
-          onChange={(e) => setTimeframe(e.target.value)}
-          style={{ padding: '5px', borderRadius: '4px', backgroundColor: '#333', color: 'white', border: '1px solid #555' }}
-        >
-          <option value="7">Past 7 Days</option>
-          <option value="30">Past 30 Days</option>
-          <option value="all">All History</option>
-        </select>
-
+      {/* HEADER / CONTROLS */}
+      <div style={{ padding: '15px 30px', backgroundColor: '#1e1e1e', display: 'flex', gap: '20px', alignItems: 'center', borderBottom: '1px solid #333' }}>
+        <h2 style={{ margin: 0, color: '#f97316' }}>POLYGON INSTABILITY DASHBOARD</h2>
         <input 
-          type="text" 
-          placeholder="Search keyword (e.g. riot)..." 
-          value={keywordInput}
-          onChange={(e) => setKeywordInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && fetchMapData()}
-          style={{ padding: '5px', borderRadius: '4px', backgroundColor: '#333', color: 'white', border: '1px solid #555' }}
+          type="text" value={keywordInput} onChange={(e) => setKeywordInput(e.target.value)}
+          placeholder="Filter events (e.g., 'drone', 'election')"
+          style={{ padding: '8px', borderRadius: '4px', border: 'none', background: '#2d2d2d', color: 'white' }}
         />
-
-        <button 
-          onClick={fetchMapData}
-          style={{ padding: '6px 12px', borderRadius: '4px', backgroundColor: '#3b82f6', color: 'white', border: 'none', cursor: 'pointer' }}
-        >
-          {isLoading ? "Loading..." : "Search"}
+        <button onClick={fetchDashboardData} disabled={isLoading} style={{ padding: '8px 16px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+          {isLoading ? 'SYNCING...' : 'SYNC DATA'}
         </button>
       </div>
 
-      {/* CATEGORY FILTERS (Top Right) */}
-      <div style={{
-        position: 'absolute', top: '20px', right: '20px', zIndex: 1000,
-        backgroundColor: 'rgba(45, 45, 45, 0.9)', padding: '15px',
-        borderRadius: '8px', color: 'white', boxShadow: '0 4px 6px rgba(0,0,0,0.5)', minWidth: '220px'
-      }}>
-        <h4 style={{ margin: '0 0 15px 0', borderBottom: '1px solid #555', paddingBottom: '8px' }}>Filters</h4>
-        {uniqueCategories.map(cat => (
-          <div key={cat} style={{ marginBottom: '10px' }}>
-            <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-              <input type="checkbox" checked={activeCategories.includes(cat)} onChange={() => handleCategoryToggle(cat)} style={{ marginRight: '10px', cursor: 'pointer' }}/>
-              <span style={{ display: 'inline-block', width: '12px', height: '12px', backgroundColor: CATEGORY_COLORS[cat] || '#ffffff', borderRadius: '50%', marginRight: '8px', border: '1px solid #000' }}></span>
-              <span style={{ fontSize: '14px' }}>{cat}</span>
-            </label>
-          </div>
-        ))}
+      {/* TOP HALF: THE GDELT MAP */}
+      <div style={{ flex: 1, position: 'relative' }}>
+        <MapContainer center={[20, 0]} zoom={2} minZoom={2} style={{ height: '100%', width: '100%' }}>
+          <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+          
+          {geoData && (
+            <GeoJSON 
+              key={`${geoData.features.length}-${hoveredTime}`} // Force re-render on hover
+              data={geoData} 
+              pointToLayer={(feature, latlng) => L.circleMarker(latlng, geoJsonStyle(feature))}
+            />
+          )}
+        </MapContainer>
       </div>
 
-      {/* TIMELINE SLIDER (Bottom Center) */}
-      <div style={{
-        position: 'absolute', bottom: '30px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000,
-        backgroundColor: 'rgba(45, 45, 45, 0.9)', padding: '15px 30px',
-        borderRadius: '8px', color: 'white', boxShadow: '0 4px 6px rgba(0,0,0,0.5)', width: '300px', textAlign: 'center'
-      }}>
-        <h4 style={{ margin: '0 0 10px 0', fontFamily: 'sans-serif' }}>Event Timeline</h4>
-        <p style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#ff4444', fontWeight: 'bold' }}>
-          Showing events for: {activeDate || (isLoading ? 'Searching...' : 'No Data')}
-        </p>
-        <input 
-          type="range" min="0" max={Math.max(0, uniqueDates.length - 1)} 
-          value={selectedDateIndex} onChange={(e) => setSelectedDateIndex(Number(e.target.value))}
-          style={{ width: '100%', cursor: 'pointer' }} disabled={uniqueDates.length === 0}
-        />
-      </div>
+      {/* BOTTOM HALF: THE FINANCIAL CHARTS */}
+      <div style={{ height: '350px', display: 'flex', gap: '20px', padding: '20px', backgroundColor: '#1e1e1e', borderTop: '2px solid #333' }}>
+        
+        {/* CHART 1: Volume Spikes */}
+        <div style={{ flex: 1, backgroundColor: '#121212', borderRadius: '8px', padding: '10px' }}>
+          <h4 style={{ margin: '0 0 10px 10px', color: '#aaa' }}>Kalshi Market Volume</h4>
+          <ResponsiveContainer width="100%" height="85%">
+            <BarChart 
+              data={kalshiData}
+	      onMouseMove={(e) => { 
+                if (e && e.activePayload && e.activePayload[0]) { 
+                  setHoveredTime(e.activePayload[0].payload.time.substring(0, 10)); 
+                } 
+              }}
+              onMouseLeave={() => setHoveredTime(null)}
+            >
+              <XAxis dataKey="time" tick={{fill: '#666', fontSize: 12}} />
+              <YAxis tick={{fill: '#666', fontSize: 12}} />
+              <RechartsTooltip contentStyle={{ backgroundColor: '#2d2d2d', border: 'none' }} />
+              <Bar dataKey="volume" fill="#f97316" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
 
-      {/* THE MAP */}
-      <MapContainer center={[20, 0]} zoom={2} minZoom={2} maxBounds={[[-90, -180], [90, 180]]} maxBoundsViscosity={1.0} style={{ height: '100%', width: '100%' }}>
-        <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" attribution='&copy; CARTO' noWrap={true} />
-        {filteredData && filteredData.features.length > 0 && (
-          <GeoJSON key={`geojson-${activeDate}-${activeCategories.length}`} data={filteredData} pointToLayer={pointToLayer} onEachFeature={onEachFeature} />
-        )}
-      </MapContainer>
+        {/* CHART 2: Price Spread / Volatility */}
+        <div style={{ flex: 1, backgroundColor: '#121212', borderRadius: '8px', padding: '10px' }}>
+          <h4 style={{ margin: '0 0 10px 10px', color: '#aaa' }}>Kalshi Implied Volatility (Spread)</h4>
+          <ResponsiveContainer width="100%" height="85%">
+            <LineChart 
+              data={kalshiData}
+	      onMouseMove={(e) => {
+	        if (e && e.activePayload && e.activePayload[0]) {
+		  setHoveredTime(e.activePayload[0].payload.time.substring(0, 10));
+		}
+	      }}
+              onMouseLeave={() => setHoveredTime(null)}
+	    >
+              <XAxis dataKey="time" tick={{fill: '#666', fontSize: 12}} />
+              <YAxis tick={{fill: '#666', fontSize: 12}} />
+              <RechartsTooltip contentStyle={{ backgroundColor: '#2d2d2d', border: 'none' }} />
+              <Line type="monotone" dataKey="price_spread_cents" stroke="#ef4444" strokeWidth={2} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
+      </div>
     </div>
   );
 }
