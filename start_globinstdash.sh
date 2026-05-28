@@ -25,4 +25,6 @@ sleep 2
 # 4. START THE FRONTEND
 echo "Starting React Frontend..."
 cd frontend
-npm run dev
+rm -rf node_modules/.vite
+sleep 2
+npm run dev -- --force
