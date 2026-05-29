@@ -3,8 +3,18 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  // Add this block to force CommonJS resolution
+  // 1. Fix the Pre-Bundling Error: Drop 'lodash' since it's handled via recharts
   optimizeDeps: {
-    include: ['recharts', 'lodash']
+    include: ['recharts']
+  },
+  // 2. Fix the Empty Map: Proxy development API traffic to the FastAPI server
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        secure: false
+      }
+    }
   }
 })
