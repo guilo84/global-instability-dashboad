@@ -39,40 +39,58 @@ function App() {
   const fetchDashboardData = async () => {
     setIsLoading(true);
     
+    // --- 1. Fetch Geographic GDELT Data ---
     try {
-      // 1. Fetch Geographic GDELT Data
       const geoUrl = `/api/events?days=${timeframe}&keyword=${encodeURIComponent(keywordInput)}`;
       const geoResponse = await fetch(geoUrl);
-      const geoJson = await geoResponse.json();
-      
-      // 2. Fetch Financial Volatility Data
-      const volUrl = `http://localhost:8001/api/v1/kalshi/volatility?limit=100`;
-      const volResponse = await fetch(volUrl);
-      const volJson = await volResponse.json();
+      if (geoResponse.ok) {
+         const geoJson = await geoResponse.json();
+         setGeoData(geoJson);
 
-      // 3. Process GDELT Dates and Categories for the Slider/Filters
-      if (geoJson.features && geoJson.features.length > 0) {
-        const dates = [...new Set(geoJson.features.map(f => f.properties.date))].sort();
-        const categories = [...new Set(geoJson.features.map(f => f.properties.category))];
-        
-        setUniqueDates(dates);
-        setSelectedDateIndex(dates.length > 0 ? dates.length - 1 : 0); // Default to most recent day
-        setUniqueCategories(categories);
-        setActiveCategories(categories); // Turn all layers on by default
+         // ---- RESTORED TIMELINE & VECTOR LOGIC ----
+         if (geoJson.features && geoJson.features.length > 0) {
+             // 1. Extract and sort unique dates
+             const dates = [...new Set(geoJson.features.map(f => f.properties.date))].sort();
+             setUniqueDates(dates);
+             setSelectedDateIndex(Math.max(0, dates.length - 1)); // Auto-select the latest date
+
+             // 2. Extract unique threat categories
+             const categories = [...new Set(geoJson.features.map(f => f.properties.category))];
+             setUniqueCategories(categories);
+             setActiveCategories(categories); // Toggle all threat vectors ON by default
+         } else {
+             // Handle empty search results gracefully
+             setUniqueDates([]);
+             setUniqueCategories([]);
+             setActiveCategories([]);
+         }
+         // ------------------------------------------
+
       } else {
-        setUniqueDates([]);
-        setUniqueCategories([]);
+         console.error("GDELT fetch returned status:", geoResponse.status);
       }
-
-      setGeoData(geoJson);
-      setKalshiData(volJson);
-    } catch (error) {
-      console.error("Error fetching telemetry:", error);
-    } finally {
-      setIsLoading(false);
+    } catch (err) {
+      console.error("GDELT Fetch Error:", err);
     }
-  };
 
+    // --- 2. Fetch Kalshi Data ---
+    try {
+      const volUrl = `/api/v1/kalshi/volatility?limit=100`;
+      const kalshiResponse = await fetch(volUrl);
+      if (kalshiResponse.ok) {
+         const kalshiJson = await kalshiResponse.json();
+         setKalshiData(kalshiJson);
+      } else {
+         console.error("Kalshi fetch returned status:", kalshiResponse.status);
+         setKalshiData([]); // Prevent Recharts from crashing on null
+      }
+    } catch (err) {
+      console.error("Kalshi Fetch Error:", err);
+      setKalshiData([]); // Prevent Recharts from crashing on null
+    }
+
+    setIsLoading(false);
+  };
   // Auto-fetch on initial mount
   useEffect(() => {
     fetchDashboardData();

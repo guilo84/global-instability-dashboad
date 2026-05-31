@@ -3,13 +3,18 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  // 1. Fix the Pre-Bundling Error: Drop 'lodash' since it's handled via recharts
   optimizeDeps: {
     include: ['recharts']
   },
-  // 2. Fix the Empty Map: Proxy development API traffic to the FastAPI server
   server: {
+    // Whitelist your Cloudflare domain to bypass the strict host check
+    allowedHosts: ['dashboard.polykratia.com'], 
     proxy: {
+      '/api/v1/kalshi': {
+        target: 'http://127.0.0.1:8001',
+        changeOrigin: true,
+        secure: false
+      },
       '/api': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
